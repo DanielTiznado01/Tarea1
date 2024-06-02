@@ -27,6 +27,18 @@ void print_board() {
     cout << endl;
 }
 
+string board_to_string() {
+    string board_str;
+    for (int i = 0; i < ROWS; ++i) {
+        for (int j = 0; j < COLS; ++j) {
+            board_str += board[i][j];
+            board_str += ' ';
+        }
+        board_str += '\n';
+    }
+    return board_str;
+}
+
 bool drop_piece(int col, char piece) {
     for (int i = ROWS - 1; i >= 0; --i) {
         if (board[i][col] == '.') {
@@ -38,21 +50,25 @@ bool drop_piece(int col, char piece) {
 }
 
 bool check_winner(char piece) {
+    // Check horizontal
     for (int i = 0; i < ROWS; ++i)
         for (int j = 0; j < COLS - 3; ++j)
             if (board[i][j] == piece && board[i][j + 1] == piece && board[i][j + 2] == piece && board[i][j + 3] == piece)
                 return true;
 
+    // Check vertical
     for (int i = 0; i < ROWS - 3; ++i)
         for (int j = 0; j < COLS; ++j)
             if (board[i][j] == piece && board[i + 1][j] == piece && board[i + 2][j] == piece && board[i + 3][j] == piece)
                 return true;
 
+    // Check diagonal (bottom left to top right)
     for (int i = 3; i < ROWS; ++i)
         for (int j = 0; j < COLS - 3; ++j)
             if (board[i][j] == piece && board[i - 1][j + 1] == piece && board[i - 2][j + 2] == piece && board[i - 3][j + 3] == piece)
                 return true;
 
+    // Check diagonal (top left to bottom right)
     for (int i = 0; i < ROWS - 3; ++i)
         for (int j = 0; j < COLS - 3; ++j)
             if (board[i][j] == piece && board[i + 1][j + 1] == piece && board[i + 2][j + 2] == piece && board[i + 3][j + 3] == piece)
@@ -75,6 +91,10 @@ void play_game(int socket_player1, int socket_player2) {
         int socket_other = socket_players[2 - current_player];
         char current_piece = pieces[current_player - 1];
 
+        string board_str = board_to_string();
+        send(socket_current, board_str.c_str(), board_str.size(), 0);
+        send(socket_other, board_str.c_str(), board_str.size(), 0);
+
         send(socket_current, "Tu turno\n", 9, 0);
         send(socket_other, "Espera tu turno\n", 16, 0);
 
@@ -91,6 +111,9 @@ void play_game(int socket_player1, int socket_player2) {
         print_board();
 
         if (check_winner(current_piece)) {
+            string board_str = board_to_string();
+            send(socket_current, board_str.c_str(), board_str.size(), 0);
+            send(socket_other, board_str.c_str(), board_str.size(), 0);
             send(socket_current, "Ganaste!\n", 9, 0);
             send(socket_other, "Perdiste!\n", 9, 0);
             break;
