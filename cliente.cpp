@@ -27,7 +27,7 @@ int main(int argc, char **argv) {
     direccionServidor.sin_port = htons(port);
 
     if (inet_pton(AF_INET, server_ip, &direccionServidor.sin_addr) <= 0) {
-        cout << "Direccion IP no valida\n";
+        cout << "Dirección IP inválida\n";
         return EXIT_FAILURE;
     }
 
@@ -38,20 +38,21 @@ int main(int argc, char **argv) {
 
     char buffer[1024];
     while (true) {
-        int bytes_received = recv(socket_cliente, buffer, 1024, 0);
+        int bytes_received = recv(socket_cliente, buffer, sizeof(buffer) - 1, 0);
         if (bytes_received <= 0) {
-            cout << "Conexion cerrada\n";
+            cout << "Conexión cerrada por el servidor\n";
             break;
         }
 
         buffer[bytes_received] = '\0';
         cout << buffer;
 
-        if (strncmp(buffer, "Tu turno", 8) == 0) {
-            cout << "Elige una columna (0-6): ";
-            string columna;
-            cin >> columna;
-            send(socket_cliente, columna.c_str(), columna.length(), 0);
+        if (strstr(buffer, "Tu turno")) {
+            cout << "Seleccionar columna: ";
+            int col;
+            cin >> col;
+            string col_str = to_string(col);
+            send(socket_cliente, col_str.c_str(), col_str.size(), 0);
         }
     }
 

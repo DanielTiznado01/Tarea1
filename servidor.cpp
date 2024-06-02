@@ -3,32 +3,41 @@
 #include <string.h>
 #include <unistd.h>
 #include <iostream>
+#include <pthread.h>
 #include <vector>
 
 using namespace std;
 
 const int ROWS = 6;
 const int COLS = 7;
-char board[ROWS][COLS];
+const int BUFFER_SIZE = 1024;
 
-void initialize_board() {
+struct Game {
+    int socket_player;
+    char board[ROWS][COLS];
+};
+
+void initialize_board(char board[ROWS][COLS]) {
     for (int i = 0; i < ROWS; ++i)
         for (int j = 0; j < COLS; ++j)
             board[i][j] = '.';
 }
 
-void print_board() {
+void print_board(const char board[ROWS][COLS]) {
+    cout << "TABLERO" << endl;
     for (int i = 0; i < ROWS; ++i) {
         for (int j = 0; j < COLS; ++j) {
             cout << board[i][j] << ' ';
         }
         cout << endl;
     }
+    cout << "-------------" << endl;
+    cout << "1 2 3 4 5 6 7" << endl;
     cout << endl;
 }
 
-string board_to_string() {
-    string board_str;
+string board_to_string(const char board[ROWS][COLS]) {
+    string board_str = "TABLERO\n";
     for (int i = 0; i < ROWS; ++i) {
         for (int j = 0; j < COLS; ++j) {
             board_str += board[i][j];
@@ -36,10 +45,12 @@ string board_to_string() {
         }
         board_str += '\n';
     }
+    board_str += "-------------\n";
+    board_str += "1 2 3 4 5 6 7\n";
     return board_str;
 }
 
-bool drop_piece(int col, char piece) {
+bool drop_piece(char board[ROWS][COLS], int col, char piece) {
     for (int i = ROWS - 1; i >= 0; --i) {
         if (board[i][col] == '.') {
             board[i][col] = piece;
@@ -49,26 +60,26 @@ bool drop_piece(int col, char piece) {
     return false;
 }
 
-bool check_winner(char piece) {
-    // Check horizontal
+bool check_winner(const char board[ROWS][COLS], char piece) {
+    
     for (int i = 0; i < ROWS; ++i)
         for (int j = 0; j < COLS - 3; ++j)
             if (board[i][j] == piece && board[i][j + 1] == piece && board[i][j + 2] == piece && board[i][j + 3] == piece)
                 return true;
 
-    // Check vertical
+  
     for (int i = 0; i < ROWS - 3; ++i)
         for (int j = 0; j < COLS; ++j)
             if (board[i][j] == piece && board[i + 1][j] == piece && board[i + 2][j] == piece && board[i + 3][j] == piece)
                 return true;
 
-    // Check diagonal (bottom left to top right)
+    
     for (int i = 3; i < ROWS; ++i)
         for (int j = 0; j < COLS - 3; ++j)
             if (board[i][j] == piece && board[i - 1][j + 1] == piece && board[i - 2][j + 2] == piece && board[i - 3][j + 3] == piece)
                 return true;
 
-    // Check diagonal (top left to bottom right)
+  
     for (int i = 0; i < ROWS - 3; ++i)
         for (int j = 0; j < COLS - 3; ++j)
             if (board[i][j] == piece && board[i + 1][j + 1] == piece && board[i + 2][j + 2] == piece && board[i + 3][j + 3] == piece)
@@ -77,58 +88,71 @@ bool check_winner(char piece) {
     return false;
 }
 
-void play_game(int socket_player1, int socket_player2) {
-    initialize_board();
-    print_board();
+void* handle_game(void* arg) {
+    Game* game = (Game*)arg;
+    int socket_player = game->socket_player;
+    char (*board)[COLS] = game->board;
 
-    int current_player = 1;
-    char pieces[] = {'X', 'O'};
-    int socket_players[] = {socket_player1, socket_player2};
-    char buffer[1024];
+    initialize_board(board);
+    print_board(board);
+
+    int current_player = 1; 
+    char pieces[] = {'S', 'C'};
+    char buffer[BUFFER_SIZE];
 
     while (true) {
-        int socket_current = socket_players[current_player - 1];
-        int socket_other = socket_players[2 - current_player];
         char current_piece = pieces[current_player - 1];
 
-        string board_str = board_to_string();
-        send(socket_current, board_str.c_str(), board_str.size(), 0);
-        send(socket_other, board_str.c_str(), board_str.size(), 0);
+        string board_str = board_to_string(board);
+        send(socket_player, board_str.c_str(), board_str.size(), 0);
 
-        send(socket_current, "Tu turno\n", 9, 0);
-        send(socket_other, "Espera tu turno\n", 16, 0);
+        if (current_player == 2) {
+            send(socket_player, "Tu turno\n", 9, 0);
+        } else {
+            send(socket_player, "Espera tu turno\n", 16, 0);
+        }
 
-        int bytes_received = recv(socket_current, buffer, 1024, 0);
-        buffer[bytes_received] = '\0';
+        int column;
+        if (current_player == 2) { 
+            int bytes_received = recv(socket_player, buffer, BUFFER_SIZE, 0);
+            if (bytes_received <= 0) {
+                cout << "Conexión cerrada\n";
+                break;
+            }
+            buffer[bytes_received] = '\0';
+            column = atoi(buffer);
+        } else { 
+            column = rand() % COLS;
+        }
 
-        int column = atoi(buffer);
-
-        if (column < 0 || column >= COLS || !drop_piece(column, current_piece)) {
-            send(socket_current, "Movimiento invalido\n", 20, 0);
+        if (column < 0 || column >= COLS || !drop_piece(board, column, current_piece)) {
+            if (current_player == 2) {
+                send(socket_player, "Movimiento invalido\n", 20, 0);
+            }
             continue;
         }
 
-        print_board();
+        print_board(board);
 
-        if (check_winner(current_piece)) {
-            string board_str = board_to_string();
-            send(socket_current, board_str.c_str(), board_str.size(), 0);
-            send(socket_other, board_str.c_str(), board_str.size(), 0);
-            send(socket_current, "Ganaste!\n", 9, 0);
-            send(socket_other, "Perdiste!\n", 9, 0);
+        if (check_winner(board, current_piece)) {
+            string board_str = board_to_string(board);
+            send(socket_player, board_str.c_str(), board_str.size(), 0);
+            if (current_player == 2) {
+                send(socket_player, "Ganaste!\n", 9, 0);
+                cout << "Juego: gana cliente.\n";
+            } else {
+                send(socket_player, "Perdiste!\n", 9, 0);
+                cout << "Juego: gana servidor.\n";
+            }
             break;
         }
 
-        if (bytes_received == 0) {
-            cout << "ConexiÃ³n cerrada\n";
-            break;
-        }
-
-        current_player = 3 - current_player;
+        current_player = 3 - current_player; 
     }
 
-    close(socket_player1);
-    close(socket_player2);
+    close(socket_player);
+    delete game;
+    return nullptr;
 }
 
 int main(int argc, char **argv) {
@@ -156,22 +180,30 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
-    if (listen(socket_server, 2) < 0) {
+    if (listen(socket_server, 10) < 0) { 
         cout << "Error en listen()\n";
         return EXIT_FAILURE;
     }
 
     cout << "Esperando conexiones...\n";
-    socklen_t addr_size = sizeof(struct sockaddr_in);
-    int socket_player1 = accept(socket_server, (struct sockaddr *)&direccionCliente, &addr_size);
-    int socket_player2 = accept(socket_server, (struct sockaddr *)&direccionCliente, &addr_size);
 
-    if (socket_player1 < 0 || socket_player2 < 0) {
-        cout << "Error en accept()\n";
-        return EXIT_FAILURE;
+    while (true) {
+        socklen_t addr_size = sizeof(struct sockaddr_in);
+        int socket_player = accept(socket_server, (struct sockaddr *)&direccionCliente, &addr_size);
+        if (socket_player < 0) {
+            cout << "Error en accept()\n";
+            continue;
+        }
+
+        cout << "Juego nuevo[" << inet_ntoa(direccionCliente.sin_addr) << ":" << ntohs(direccionCliente.sin_port) << "]\n";
+
+        Game* game = new Game();
+        game->socket_player = socket_player;
+
+        pthread_t thread_id;
+        pthread_create(&thread_id, nullptr, handle_game, (void*)game);
+        pthread_detach(thread_id); 
     }
-
-    play_game(socket_player1, socket_player2);
 
     close(socket_server);
     return 0;
