@@ -125,7 +125,7 @@ void* handle_game(void* arg) {
         }
 
         int column;
-        if (current_player == 2) { 
+        if (current_player == 2) {
             int bytes_received = recv(socket_player, buffer, BUFFER_SIZE, 0);
             if (bytes_received <= 0) {
                 cout << "Conexión cerrada\n";
