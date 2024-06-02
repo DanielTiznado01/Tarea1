@@ -5,8 +5,8 @@
 #include <iostream>
 #include <pthread.h>
 #include <vector>
-#include <cstdlib> // Para la función rand() y srand()
-#include <ctime>   // Para la función time()
+#include <cstdlib>
+#include <ctime>
 
 using namespace std;
 
@@ -17,7 +17,9 @@ const int BUFFER_SIZE = 1024;
 struct Game {
     int socket_player;
     char board[ROWS][COLS];
-    bool is_player_start; // Nuevo campo para indicar quién empieza
+    bool is_player_start; 
+    string client_ip;
+    int client_port;
 };
 
 void initialize_board(char board[ROWS][COLS]) {
@@ -64,25 +66,21 @@ bool drop_piece(char board[ROWS][COLS], int col, char piece) {
 }
 
 bool check_winner(const char board[ROWS][COLS], char piece) {
-    // Check horizontal
     for (int i = 0; i < ROWS; ++i)
         for (int j = 0; j < COLS - 3; ++j)
             if (board[i][j] == piece && board[i][j + 1] == piece && board[i][j + 2] == piece && board[i][j + 3] == piece)
                 return true;
 
-    // Check vertical
     for (int i = 0; i < ROWS - 3; ++i)
         for (int j = 0; j < COLS; ++j)
             if (board[i][j] == piece && board[i + 1][j] == piece && board[i + 2][j] == piece && board[i + 3][j] == piece)
                 return true;
 
-    // Check diagonal (bottom left to top right)
     for (int i = 3; i < ROWS; ++i)
         for (int j = 0; j < COLS - 3; ++j)
             if (board[i][j] == piece && board[i - 1][j + 1] == piece && board[i - 2][j + 2] == piece && board[i - 3][j + 3] == piece)
                 return true;
 
-    // Check diagonal (top left to bottom right)
     for (int i = 0; i < ROWS - 3; ++i)
         for (int j = 0; j < COLS - 3; ++j)
             if (board[i][j] == piece && board[i + 1][j + 1] == piece && board[i + 2][j + 2] == piece && board[i + 3][j + 3] == piece)
@@ -99,9 +97,16 @@ void* handle_game(void* arg) {
     initialize_board(board);
     print_board(board);
 
-    int current_player = game->is_player_start ? 2 : 1; // Cliente empieza si is_player_start es true
+    int current_player = game->is_player_start ? 2 : 1; 
     char pieces[] = {'S', 'C'};
     char buffer[BUFFER_SIZE];
+
+    cout << "Juego [" << game->client_ip << ":" << game->client_port << "]: ";
+    if (game->is_player_start) {
+        cout << "inicia juego el cliente." << endl;
+    } else {
+        cout << "inicia juego el servidor." << endl;
+    }
 
     while (true) {
         char current_piece = pieces[current_player - 1];
@@ -110,13 +115,13 @@ void* handle_game(void* arg) {
         send(socket_player, board_str.c_str(), board_str.size(), 0);
 
         if (current_player == 2) {
-            send(socket_player, "Tu turno\n", 9, 0);
+            send(socket_player, "Te toca\n", 9, 0);
         } else {
             send(socket_player, "Espera tu turno\n", 16, 0);
         }
 
         int column;
-        if (current_player == 2) { // Movimiento del cliente
+        if (current_player == 2) { 
             int bytes_received = recv(socket_player, buffer, BUFFER_SIZE, 0);
             if (bytes_received <= 0) {
                 cout << "Conexión cerrada\n";
@@ -124,8 +129,10 @@ void* handle_game(void* arg) {
             }
             buffer[bytes_received] = '\0';
             column = atoi(buffer) - 1;
-        } else { // Movimiento del servidor
+            cout << "Juego [" << game->client_ip << ":" << game->client_port << "]: cliente juega columna " << (column + 1) << "." << endl;
+        } else { 
             column = rand() % COLS;
+            cout << "Juego [" << game->client_ip << ":" << game->client_port << "]: servidor juega columna " << (column + 1) << "." << endl;
         }
 
         if (column < 0 || column >= COLS || !drop_piece(board, column, current_piece)) {
@@ -141,17 +148,19 @@ void* handle_game(void* arg) {
             string board_str = board_to_string(board);
             send(socket_player, board_str.c_str(), board_str.size(), 0);
             if (current_player == 2) {
-                send(socket_player, "Ganaste!\n", 9, 0);
-                cout << "Juego: gana cliente.\n";
+                send(socket_player, "Ganaste MASTER!\n", 9, 0);
+                cout << "Juego [" << game->client_ip << ":" << game->client_port << "]: ganaste CRACK" << endl;
             } else {
                 send(socket_player, "Perdiste!\n", 9, 0);
-                cout << "Juego: gana servidor.\n";
+                cout << "Juego [" << game->client_ip << ":" << game->client_port << "]: gana servidor." << endl;
             }
             break;
         }
 
-        current_player = 3 - current_player; // Alterna entre 1 y 2
+        current_player = 3 - current_player; 
     }
+
+    cout << "Juego [" << game->client_ip << ":" << game->client_port << "]: fin del juego." << endl;
 
     close(socket_player);
     delete game;
@@ -188,7 +197,7 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
-    srand(time(nullptr)); // Inicializa la semilla para rand()
+    srand(time(nullptr)); 
 
     cout << "Esperando conexiones...\n";
 
@@ -200,17 +209,24 @@ int main(int argc, char **argv) {
             continue;
         }
 
-        cout << "Juego nuevo[" << inet_ntoa(direccionCliente.sin_addr) << ":" << ntohs(direccionCliente.sin_port) << "]\n";
+        string client_ip = inet_ntoa(direccionCliente.sin_addr);
+        int client_port = ntohs(direccionCliente.sin_port);
+
+        cout << "Juego nuevo[" << client_ip << ":" << client_port << "]" << endl;
+
 
         Game* game = new Game();
         game->socket_player = socket_player;
-        game->is_player_start = rand() % 2; // Decide aleatoriamente si el cliente empieza
+        game->is_player_start = rand() % 2; 
+        game->client_ip = client_ip;
+        game->client_port = client_port;
 
         pthread_t thread_id;
         pthread_create(&thread_id, nullptr, handle_game, (void*)game);
-        pthread_detach(thread_id);
+        pthread_detach(thread_id); 
     }
 
     close(socket_server);
     return 0;
 }
+//Mondongo

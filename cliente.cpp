@@ -47,8 +47,8 @@ int main(int argc, char *argv[]) {
         buffer[bytes_received] = '\0';
         cout << buffer;
 
-        if (strstr(buffer, "Tu turno")) {
-            cout << "Seleccionar columna: ";
+        if (strstr(buffer, "Te toca jugar:")) {
+            cout << "Seleccionar movimiento: ";
             int col;
             cin >> col;
             string col_str = to_string(col);
