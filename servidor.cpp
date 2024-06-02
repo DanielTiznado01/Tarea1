@@ -120,7 +120,7 @@ void* handle_game(void* arg) {
                 break;
             }
             buffer[bytes_received] = '\0';
-            column = atoi(buffer);
+            column = atoi(buffer) - 1;
         } else { 
             column = rand() % COLS;
         }
