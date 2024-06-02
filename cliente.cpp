@@ -6,13 +6,13 @@
 
 using namespace std;
 
-int main(int argc, char **argv) {
+int main(int argc, char *argv[]) {
     if (argc != 3) {
         cout << "Uso: " << argv[0] << " <direccion IP> <puerto>\n";
         return EXIT_FAILURE;
     }
 
-    char *server_ip = argv[1];
+    const char *server_ip = argv[1];
     int port = atoi(argv[2]);
     int socket_cliente;
     struct sockaddr_in direccionServidor;
@@ -59,3 +59,4 @@ int main(int argc, char **argv) {
     close(socket_cliente);
     return 0;
 }
+
